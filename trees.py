@@ -6,44 +6,42 @@ import time
 
 st.set_page_config(page_title="Tree Generator", layout="centered")
 st.title("🌳 Tree Generator (p5-style)")
-st.write("Play with the sliders and press **Generate tree** to see a new one.")
+st.write("Use the sliders, then either **Generate tree** or **Grow tree** to animate it.")
 
 # ---------------------------------------------------------
 # SIDEBAR CONTROLS
 # ---------------------------------------------------------
 st.sidebar.header("Tree Settings")
 
-max_depth = st.sidebar.slider("Depth (levels)", min_value=1, max_value=12, value=8)
+max_depth = st.sidebar.slider("Max depth (levels)", min_value=2, max_value=12, value=8)
 initial_length = st.sidebar.slider("Initial branch length", 40, 200, 120)
 branch_scale = st.sidebar.slider("Branch scale (shrink per level)", 0.4, 0.9, 0.7, step=0.05)
 base_angle_deg = st.sidebar.slider("Base angle (degrees)", 5, 60, 25)
 randomness = st.sidebar.slider("Random angle jitter", 0.0, 25.0, 6.0, step=0.5)
 
-# we keep a seed in session so button can refresh it
+# keep seed around so animation is consistent
 if "tree_seed" not in st.session_state:
     st.session_state.tree_seed = 0
 
-if st.button("🌱 Generate tree"):
-    # new seed -> different randomness
-    st.session_state.tree_seed = int(time.time() * 1000) % 10_000_000
+col1, col2 = st.columns(2)
+generate_clicked = col1.button("🌱 Generate tree")
+grow_clicked = col2.button("🌱➡️🌳 Grow tree")
 
-random.seed(st.session_state.tree_seed)
-
-# ---------------------------------------------------------
-# TREE DRAWING LOGIC
-# ---------------------------------------------------------
-def draw_branch(ax, x, y, length, angle, depth):
-    """Recursive branch drawing."""
+def draw_branch(ax, x, y, length, angle, depth, current_depth):
+    """
+    depth = total depth allowed
+    current_depth = how far we are rendering in this frame
+    we only draw until current_depth!
+    """
     if depth == 0 or length < 2:
+        return
+    if current_depth == 0:
         return
 
     x2 = x + length * math.cos(math.radians(angle))
     y2 = y + length * math.sin(math.radians(angle))
 
-    # thicker at bottom, thinner at top
     linewidth = max(1.0, depth * 0.5)
-
-    # draw branch in black so it's visible
     ax.plot([x, x2], [y, y2], linewidth=linewidth, color="black")
 
     next_length = length * branch_scale
@@ -57,6 +55,7 @@ def draw_branch(ax, x, y, length, angle, depth):
         next_length,
         angle - base_angle_deg + jitter,
         depth - 1,
+        current_depth - 1,
     )
     # right
     draw_branch(
@@ -66,24 +65,11 @@ def draw_branch(ax, x, y, length, angle, depth):
         next_length,
         angle + base_angle_deg + jitter,
         depth - 1,
+        current_depth - 1,
     )
 
-# ---------------------------------------------------------
-# MATPLOTLIB FIGURE
-# ---------------------------------------------------------
-fig, ax = plt.subplots(figsize=(5, 7))
-
-# start at bottom center
-start_x = 0
-start_y = 0
-draw_branch(ax, start_x, start_y, initial_length, 90, max_depth)
-
-# tidy up
-ax.set_aspect("equal")
-ax.axis("off")
-
-# center it: x a bit wider, y a bit taller
-ax.set_xlim(-initial_length * 1.3, initial_length * 1.3)
-ax.set_ylim(0, initial_length * 2.4)
-
-st.pyplot(fig)
+def make_figure(depth_to_render, seed):
+    random.seed(seed)
+    fig, ax = plt.subplots(figsize=(5, 7))
+    start_x, start_y = 0, 0
+    draw_branch(ax, star_
