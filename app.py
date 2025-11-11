@@ -1,133 +1,104 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-import random
 import math
+import random
+import time
 
-st.set_page_config(page_title="Tree Generator", layout="wide")
+st.set_page_config(page_title="Tree Generator", layout="centered")
+st.title("🌳 Tree Generator (p5-style)")
+st.write("Use the sliders, then either **Generate tree** or **Grow tree** to animate it.")
 
-st.title("🌳 Parametric Tree Generator")
+# ---------------------------------------------------------
+# SIDEBAR CONTROLS
+# ---------------------------------------------------------
+st.sidebar.header("Tree Settings")
 
-# -----------------------------
-# Sidebar controls
-# -----------------------------
-st.sidebar.header("Structure")
-max_depth = st.sidebar.slider("Max depth", 1, 10, 5)
-base_length = st.sidebar.slider("Base branch length", 30, 200, 90)
-length_decay = st.sidebar.slider("Length decay per depth", 0.4, 0.95, 0.7)
-branch_prob = st.sidebar.slider("Probability to branch (per node)", 0.0, 1.0, 0.9)
-max_children = st.sidebar.slider("Max children per node", 1, 6, 3)
+max_depth = st.sidebar.slider("Max depth (levels)", min_value=2, max_value=12, value=8)
+initial_length = st.sidebar.slider("Initial branch length", 40, 200, 120)
+branch_scale = st.sidebar.slider("Branch scale (shrink per level)", 0.4, 0.9, 0.7, step=0.05)
+base_angle_deg = st.sidebar.slider("Base angle (degrees)", 5, 60, 25)
+randomness = st.sidebar.slider("Random angle jitter", 0.0, 25.0, 6.0, step=0.5)
 
-st.sidebar.header("Angles")
-base_angle = st.sidebar.slider("Base angle (deg)", -90, 90, -90)  # -90 = straight up
-spread = st.sidebar.slider("Spread (deg)", 0, 120, 40)
-angle_jitter = st.sidebar.slider("Random angle jitter (deg)", 0, 50, 10)
+# keep seed around so animation is consistent
+if "tree_seed" not in st.session_state:
+    st.session_state.tree_seed = 0
 
-st.sidebar.header("Leaves")
-leaf_on_end = st.sidebar.checkbox("Draw leaves only on terminal branches", True)
-leaf_size = st.sidebar.slider("Leaf size", 3, 40, 14)
+col1, col2 = st.columns(2)
+generate_clicked = col1.button("🌱 Generate tree")
+grow_clicked = col2.button("🌱➡️🌳 Grow tree")
 
-st.sidebar.header("Style")
-branch_thickness = st.sidebar.slider("Base branch thickness", 1.0, 15.0, 6.0)
-branch_decay = st.sidebar.slider("Thickness decay per depth", 0.2, 1.0, 0.6)
-palette_name = st.sidebar.selectbox("Palette", ["Warm", "Forest", "Mono"])
-bg_color = "#fefae0"
-branch_color = "#6d4c41"
-leaf_color = "#4CB944"
-
-if palette_name == "Forest":
-    bg_color = "#e0f2f1"
-    branch_color = "#37474f"
-    leaf_color = "#2e7d32"
-elif palette_name == "Mono":
-    bg_color = "#f8f9fa"
-    branch_color = "#212529"
-    leaf_color = "#a22c29"
-# Warm is default above
-
-# -----------------------------
-# Tree generation
-# -----------------------------
-fig, ax = plt.subplots(figsize=(6, 6))
-fig.patch.set_facecolor(bg_color)
-ax.set_facecolor(bg_color)
-
-ax.set_xlim(0, 800)
-ax.set_ylim(0, 800)
-ax.set_aspect("equal")
-ax.axis("off")
-
-
-def draw_branch(x, y, length, angle_deg, depth, thickness):
+def draw_branch(ax, x, y, length, angle, depth, current_depth):
     """
-    Recursively draw a branch.
-    x, y: starting point
-    length: length of this segment
-    angle_deg: direction in degrees
-    depth: current depth
-    thickness: current line thickness
+    depth = total depth allowed
+    current_depth = how far we are rendering in this frame
+    we only draw until current_depth!
     """
-    # Convert angle to radians
-    angle_rad = math.radians(angle_deg)
-    x2 = x + length * math.cos(angle_rad)
-    y2 = y + length * math.sin(angle_rad)
-
-    # draw the branch segment
-    ax.plot([x, x2], [y, y2], color=branch_color, linewidth=thickness, solid_capstyle="round")
-
-    # If we've reached max depth, draw a leaf (terminal)
-    if depth >= max_depth:
-        if leaf_on_end:
-            leaf = plt.Circle((x2, y2), leaf_size, color=leaf_color, fill=True)
-            ax.add_patch(leaf)
+    if depth == 0 or length < 2:
+        return
+    if current_depth == 0:
         return
 
-    # Decide if this node will branch at all (stochastic rule)
-    if random.random() > branch_prob:
-        # no children; maybe leaf here
-        if leaf_on_end:
-            leaf = plt.Circle((x2, y2), leaf_size, color=leaf_color, fill=True)
-            ax.add_patch(leaf)
-        return
+    x2 = x + length * math.cos(math.radians(angle))
+    y2 = y + length * math.sin(math.radians(angle))
 
-    # number of children this node will try to make
-    num_children = random.randint(1, max_children)
+    linewidth = max(1.0, depth * 0.5)
+    ax.plot([x, x2], [y, y2], linewidth=linewidth, color="black")
 
-    # new length and thickness decay with depth
-    new_length = length * length_decay
-    new_thickness = max(thickness * branch_decay, 0.5)
+    next_length = length * branch_scale
+    jitter = random.uniform(-randomness, randomness)
 
-    for i in range(num_children):
-        # spread children around the main direction
-        # e.g. base_angle = -90 (up), spread = 40 → children around -90 ± 20
-        # we also add a little random jitter
-        offset = (i - (num_children - 1) / 2.0)  # centered
-        child_angle = angle_deg + offset * (spread / max(num_children, 1))
-        child_angle += random.uniform(-angle_jitter, angle_jitter)
+    # left
+    draw_branch(
+        ax,
+        x2,
+        y2,
+        next_length,
+        angle - base_angle_deg + jitter,
+        depth - 1,
+        current_depth - 1,
+    )
+    # right
+    draw_branch(
+        ax,
+        x2,
+        y2,
+        next_length,
+        angle + base_angle_deg + jitter,
+        depth - 1,
+        current_depth - 1,
+    )
 
-        draw_branch(
-            x2,
-            y2,
-            new_length,
-            child_angle,
-            depth + 1,
-            new_thickness
-        )
+def make_figure(depth_to_render, seed):
+    random.seed(seed)
+    fig, ax = plt.subplots(figsize=(5, 7))
+    start_x, start_y = 0, 0
+    draw_branch(ax, start_x, start_y, initial_length, 90, max_depth, depth_to_render)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_xlim(-initial_length * 1.3, initial_length * 1.3)
+    ax.set_ylim(0, initial_length * 2.4)
+    return fig
 
-# -----------------------------
-# root call
-# -----------------------------
-# Start from bottom center, pointing "up" (in our coord system y increases downward,
-# so up is angle -90 by default)
-draw_branch(400, 60, base_length, base_angle, 1, branch_thickness)
+# placeholder where we show the tree
+tree_slot = st.empty()
 
-st.pyplot(fig)
+if generate_clicked:
+    # refresh seed so the shape changes
+    st.session_state.tree_seed = int(time.time() * 1000) % 10_000_000
+    fig = make_figure(depth_to_render=max_depth, seed=st.session_state.tree_seed)
+    tree_slot.pyplot(fig)
 
-st.markdown("""
-**How this maps to your p5.js version:**
+elif grow_clicked:
+    # keep same seed for the whole animation → it looks like "one tree growing"
+    if st.session_state.tree_seed == 0:
+        st.session_state.tree_seed = int(time.time() * 1000) % 10_000_000
 
-- Generations → `max_depth`
-- Depth-based radius → `length_decay` and `branch_decay`
-- Stochastic branching → `branch_prob` + `max_children`
-- Leaf-on-end → checkbox
-- Angle control → `base_angle`, `spread`, `angle_jitter`
-""")
+    for d in range(1, max_depth + 1):
+        fig = make_figure(depth_to_render=d, seed=st.session_state.tree_seed)
+        tree_slot.pyplot(fig)
+        time.sleep(0.25)   # speed of growth
+
+else:
+    # initial render (just show full tree once)
+    fig = make_figure(depth_to_render=max_depth, seed=st.session_state.tree_seed)
+    tree_slot.pyplot(fig)
