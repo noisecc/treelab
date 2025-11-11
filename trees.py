@@ -72,4 +72,33 @@ def make_figure(depth_to_render, seed):
     random.seed(seed)
     fig, ax = plt.subplots(figsize=(5, 7))
     start_x, start_y = 0, 0
-    draw_branch(ax, star_
+    draw_branch(ax, start_x, start_y, initial_length, 90, max_depth, depth_to_render)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_xlim(-initial_length * 1.3, initial_length * 1.3)
+    ax.set_ylim(0, initial_length * 2.4)
+    return fig
+
+# placeholder where we show the tree
+tree_slot = st.empty()
+
+if generate_clicked:
+    # refresh seed so the shape changes
+    st.session_state.tree_seed = int(time.time() * 1000) % 10_000_000
+    fig = make_figure(depth_to_render=max_depth, seed=st.session_state.tree_seed)
+    tree_slot.pyplot(fig)
+
+elif grow_clicked:
+    # keep same seed for the whole animation → it looks like "one tree growing"
+    if st.session_state.tree_seed == 0:
+        st.session_state.tree_seed = int(time.time() * 1000) % 10_000_000
+
+    for d in range(1, max_depth + 1):
+        fig = make_figure(depth_to_render=d, seed=st.session_state.tree_seed)
+        tree_slot.pyplot(fig)
+        time.sleep(0.25)   # speed of growth
+
+else:
+    # initial render (just show full tree once)
+    fig = make_figure(depth_to_render=max_depth, seed=st.session_state.tree_seed)
+    tree_slot.pyplot(fig)
